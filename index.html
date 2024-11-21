@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Canvas with Three.js</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        canvas { 
+            display: block; 
+        }
+        .toolbar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 30, 30, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            display: flex;
+            gap: 15px;
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+        }
+        
+        .tool-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 16px;
+        }
+        
+        .tool-button:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        
+        .tool-button.active {
+            background: #2196F3;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            z-index: 1001;
+        }
+        .settings-panel {
+        position: fixed;
+        right: 20px;
+        top: 20px;
+        background: #333;
+        padding: 15px;
+        border-radius: 5px;
+        color: white;
+    }
+
+        .stats-panel {
+            position: fixed;
+            left: 20px;
+            top: 20px;
+            background: rgba(30, 30, 30, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-family: monospace;
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+        }
+
+        .slider-container {
+        margin: 10px 0;
+    }
+
+    .slider-container label {
+        display: block;
+        margin-bottom: 5px;
+    }
+
+
+    input[type="range"] {
+        width: 200px;
+    }
+
+        input[type="color"] {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            pointer-events:auto;
+        }
+        
+    </style>
+</head>
+<body>
+    <div id="stats" class="stats-panel">
+        FPS: 0<br>
+        Brush Strokes: 0<br>
+        Active Canvases: 1
+    </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+
+<!-- Add this before your <script> tag -->
+
+<!-- Documentation -->
+<!--
+Core Functions:
+    init(): Initializes the 3D scene, camera, renderer, and all necessary components
+    animate(): Main animation loop that updates the scene and handles rendering
+    
+Scene Setup:
+    setupLighting(): Configures directional and ambient lighting in the scene
+    createInitialCanvas(): Creates the first drawing canvas in the scene
+    
+Drawing Tools:
+    paint(event): Handles the painting functionality when mouse is clicked/dragged
+    togglePaint(): Toggles paint mode on/off
+    toggleEraser(): Toggles eraser mode on/off
+    
+Canvas Management:
+    createNewCanvas(): Creates a new canvas in front of the camera
+    deleteSelectedCanvas(): Removes the currently selected canvas
+    moveCanvas(event): Handles canvas movement in 3D space
+    
+UI Elements:
+    createUIElements(): Sets up the toolbar and all UI buttons
+    createToolButton(): Creates individual tool buttons with tooltips
+    createSettingsPanel(): Creates the color and brush size controls
+    createLightingControls(): Creates light adjustment controls
+    
+Event Handlers:
+    addEventListeners(): Sets up all event listeners for user interaction
+    onMouseDown(event): Handles mouse press events
+    onMouseUp(event): Handles mouse release events
+    onMouseMove(event): Handles mouse movement events
+    handleKeyboardShortcuts(event): Processes keyboard commands
+    
+Utility Functions:
+    getIntersects(event): Calculates ray intersection with canvases
+    updateStats(): Updates performance statistics display
+    onWindowResize(): Handles window resize events
+    
+Advanced Features:
+    initVoiceCommands(): Sets up voice control functionality
+    addGestureControls(): Implements touch gesture controls
+    loadPaintbrushModel(): Loads 3D paintbrush model (if available)
+
+Performance:
+    - FPS monitoring and display
+    - Brush stroke counting
+    - Active canvas tracking
+
+Keyboard Shortcuts:
+    P: Toggle Paint Mode
+    E: Toggle Eraser Mode
+    N: New Canvas
+    Delete: Remove Selected Canvas
+
+Touch Controls:
+    - Single finger: Draw/Erase
+    - Two fingers: Adjust brush size
+    - Two fingers rotate: Orbit camera
+-->
+<script>
+let scene, camera, renderer, isPainting = false, paintbrushEnabled = false, eraserEnabled = false, canvasSelected = false;
+let paintColor = '#000000', brushThickness = 0.05;
+let isDraggingCanvas = false;
+let raycaster, mouse, controls;
+let canvases = [];
+let selectedCanvas = null;
+let dots = [];
+let directionalLight, ambientLight;
+let mixer;
+let animations = [];
+let clock = new THREE.Clock();
+let brushStrokes = 0;
+let performanceStats = [];
+let lastFrame = performance.now();
+
+// Initialize loaders
+const loader = new THREE.GLTFLoader();
+const dracoLoader = new THREE.DRACOLoader();
+dracoLoader.setDecoderPath('/draco/');
+loader.setDRACOLoader(dracoLoader);
+
+// Initialize the scene, camera, renderer, and controls
+/**
+ * Initializes the 3D scene and all necessary components
+ * Sets up the renderer, camera, lights, and initial canvas
+ * Creates UI elements and adds event listeners
+ */
+function init() {
+    // Scene setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    // Camera setup
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, 7);
+    camera.lookAt(0, 0, 0);
+
+    // Renderer setup
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    // Lighting setup
+    /**
+ * Sets up the lighting system in the scene
+ * Creates directional light (sun-like) and ambient light
+ * Configures shadow properties for realistic rendering
+ */
+    setupLighting();
+
+    // Orbit Controls
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.screenSpacePanning = false;
+    controls.minDistance = 1;
+    controls.maxDistance = 50;
+    controls.maxPolarAngle = Math.PI;
+
+    // Initialize raycaster and mouse vector
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    // Create initial canvas
+    createInitialCanvas();
+
+    // UI Elements
+    createUIElements();
+    createLightingControls();
+
+    // Event listeners
+    addEventListeners();
+    
+    // Initialize voice commands
+    initVoiceCommands();
+    
+    // Add gesture controls
+    addGestureControls();
+
+    // Load paintbrush model if needed
+    loadPaintbrushModel();
+}
+
+function setupLighting() {
+    // Directional light (sun-like)
+    directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 5, 5);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 500;
+    directionalLight.shadow.camera.left = -10;
+    directionalLight.shadow.camera.right = 10;
+    directionalLight.shadow.camera.top = 10;
+    directionalLight.shadow.camera.bottom = -10;
+    scene.add(directionalLight);
+
+    // Ambient light (general illumination)
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    // Optional: Add light helper for debugging
+    // const helper = new THREE.DirectionalLightHelper(directionalLight, 5);
+    // scene.add(helper);
+}
+
+function createInitialCanvas() {
+    const geometry = new THREE.PlaneGeometry(5, 5);
+    const material = new THREE.MeshStandardMaterial({ 
+        color: 0xffffff, 
+        side: THREE.DoubleSide,
+        roughness: 0.7,
+        metalness: 0.0
+    });
+    const initialCanvas = new THREE.Mesh(geometry, material);
+    initialCanvas.receiveShadow = true;
+    initialCanvas.position.set(0, 0, 0);
+    scene.add(initialCanvas);
+    canvases.push(initialCanvas);
+    selectedCanvas = initialCanvas;
+}
+
+function addEventListeners() {
+    // Mouse events
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('mousemove', onMouseMove);
+    
+    // Window resize
+    window.addEventListener('resize', onWindowResize, false);
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
+}
+
+function loadPaintbrushModel() {
+    loader.load('paintbrush/scene.gltf', (gltf) => {
+        const model = gltf.scene;
+        model.scale.set(0.1, 0.1, 0.1);
+        model.traverse((node) => {
+            if (node.isMesh) {
+                node.castShadow = true;
+            }
+        });
+        window.paintbrushModel = model;
+        scene.add(model);
+        model.visible = false;
+    }, 
+    // Progress callback
+    (xhr) => {
+        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+    },
+    // Error callback
+    (error) => {
+        console.error('Error loading model:', error);
+    });
+}
+function createUIElements() {
+    const toolbar = document.createElement('div');
+    toolbar.className = 'toolbar';
+    document.body.appendChild(toolbar);
+
+    // Create main tool buttons
+    const paintButton = createToolButton(toolbar, 'fa-paint-brush', 'Paint Mode (P)', () => {
+        togglePaint();
+    });
+
+    const eraseButton = createToolButton(toolbar, 'fa-eraser', 'Eraser Mode (E)', () => {
+        toggleEraser();
+    });
+
+    const newCanvasButton = createToolButton(toolbar, 'fa-plus', 'New Canvas (N)', () => {
+        createNewCanvas();
+    });
+
+    const deleteButton = createToolButton(toolbar, 'fa-trash', 'Delete Canvas (Del)', () => {
+        deleteSelectedCanvas();
+    });
+
+    // Create settings panel
+    createSettingsPanel();
+}
+
+function createToolButton(toolbar, icon, tooltip, callback) {
+    const button = document.createElement('button');
+    button.className = 'tool-button';
+    button.innerHTML = `<i class="fas ${icon}"></i>`;
+    
+    const tooltipDiv = document.createElement('div');
+    tooltipDiv.className = 'tooltip';
+    tooltipDiv.textContent = tooltip;
+    
+    button.addEventListener('mouseover', () => {
+        tooltipDiv.style.display = 'block';
+        tooltipDiv.style.left = `${button.offsetLeft}px`;
+        tooltipDiv.style.top = `${button.offsetTop - 30}px`;
+    });
+    
+    button.addEventListener('mouseout', () => {
+        tooltipDiv.style.display = 'none';
+    });
+    
+    button.addEventListener('click', callback);
+    toolbar.appendChild(button);
+    toolbar.appendChild(tooltipDiv);
+    
+    return button;
+}
+
+function createSettingsPanel() {
+    const settingsPanel = document.createElement('div');
+    settingsPanel.className = 'settings-panel';
+    document.body.appendChild(settingsPanel);
+
+    // Color picker
+    const colorContainer = document.createElement('div');
+    colorContainer.className = 'slider-container';
+    const colorLabel = document.createElement('label');
+    colorLabel.textContent = 'Color';
+    const colorPicker = document.createElement('input');
+    colorPicker.type = 'color';
+    colorPicker.value = paintColor;
+    colorPicker.addEventListener('input', (e) => {
+        paintColor = e.target.value;
+    });
+    colorContainer.appendChild(colorLabel);
+    colorContainer.appendChild(colorPicker);
+    settingsPanel.appendChild(colorContainer);
+
+    // Brush size slider
+    const brushContainer = document.createElement('div');
+    brushContainer.className = 'slider-container';
+    const brushLabel = document.createElement('label');
+    brushLabel.textContent = 'Brush Size';
+    const brushSizeValue = document.createElement('span');
+    brushSizeValue.textContent = ` (${brushThickness})`;
+    brushLabel.appendChild(brushSizeValue);
+    
+    const brushSlider = document.createElement('input');
+    brushSlider.type = 'range';
+    brushSlider.min = '0.01';
+    brushSlider.max = '0.2';
+    brushSlider.step = '0.01';
+    brushSlider.value = brushThickness;
+    brushSlider.addEventListener('input', (e) => {
+        brushThickness = parseFloat(e.target.value);
+        brushSizeValue.textContent = ` (${brushThickness.toFixed(2)})`;
+    });
+    brushContainer.appendChild(brushLabel);
+    brushContainer.appendChild(brushSlider);
+    settingsPanel.appendChild(brushContainer);
+}
+
+function createLightingControls() {
+    const lightControls = document.createElement('div');
+    lightControls.className = 'settings-panel';
+    lightControls.style.top = '200px';
+    document.body.appendChild(lightControls);
+
+    // Light intensity control
+    const intensityContainer = document.createElement('div');
+    intensityContainer.className = 'slider-container';
+    const intensityLabel = document.createElement('label');
+    intensityLabel.textContent = 'Light Intensity';
+    const intensityValue = document.createElement('span');
+    intensityValue.textContent = ` (${directionalLight.intensity})`;
+    intensityLabel.appendChild(intensityValue);
+    
+    const intensitySlider = document.createElement('input');
+    intensitySlider.type = 'range';
+    intensitySlider.min = '0';
+    intensitySlider.max = '2';
+    intensitySlider.step = '0.1';
+    intensitySlider.value = directionalLight.intensity;
+    intensitySlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        directionalLight.intensity = value;
+        intensityValue.textContent = ` (${value.toFixed(1)})`;
+    });
+    intensityContainer.appendChild(intensityLabel);
+    intensityContainer.appendChild(intensitySlider);
+    lightControls.appendChild(intensityContainer);
+
+    // Optional: Add ambient light intensity control
+    const ambientContainer = document.createElement('div');
+    ambientContainer.className = 'slider-container';
+    const ambientLabel = document.createElement('label');
+    ambientLabel.textContent = 'Ambient Light';
+    const ambientValue = document.createElement('span');
+    ambientValue.textContent = ` (${ambientLight.intensity})`;
+    ambientLabel.appendChild(ambientValue);
+    
+    const ambientSlider = document.createElement('input');
+    ambientSlider.type = 'range';
+    ambientSlider.min = '0';
+    ambientSlider.max = '1';
+    ambientSlider.step = '0.1';
+    ambientSlider.value = ambientLight.intensity;
+    ambientSlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        ambientLight.intensity = value;
+        ambientValue.textContent = ` (${value.toFixed(1)})`;
+    });
+    ambientContainer.appendChild(ambientLabel);
+    ambientContainer.appendChild(ambientSlider);
+    lightControls.appendChild(ambientContainer);
+}
+
+function handleKeyboardShortcuts(event) {
+    switch(event.key.toLowerCase()) {
+        case 'p':
+            togglePaint();
+            break;
+        case 'e':
+            toggleEraser();
+            break;
+        case 'n':
+            createNewCanvas();
+            break;
+        case 'delete':
+            deleteSelectedCanvas();
+            break;
+    }
+}
+
+function togglePaint() {
+    paintbrushEnabled = !paintbrushEnabled;
+    eraserEnabled = false;
+    canvasSelected = false;
+    controls.enabled = !paintbrushEnabled;
+    updateButtonStates();
+}
+
+function toggleEraser() {
+    eraserEnabled = !eraserEnabled;
+    paintbrushEnabled = false;
+    canvasSelected = false;
+    controls.enabled = !eraserEnabled;
+    updateButtonStates();
+}
+
+function updateButtonStates() {
+    document.querySelectorAll('.tool-button').forEach(button => {
+        button.classList.remove('active');
+    });
+    
+    if (paintbrushEnabled) {
+        document.querySelector('.fa-paint-brush').parentElement.classList.add('active');
+    } else if (eraserEnabled) {
+        document.querySelector('.fa-eraser').parentElement.classList.add('active');
+    }
+}
+
+function initVoiceCommands() {
+    if ('webkitSpeechRecognition' in window) {
+        const recognition = new webkitSpeechRecognition();
+        recognition.continuous = true;
+        
+        recognition.onresult = (event) => {
+            const command = event.results[event.results.length - 1][0].transcript.toLowerCase();
+            
+            if (command.includes('new canvas')) createNewCanvas();
+            if (command.includes('delete canvas')) deleteSelectedCanvas();
+            if (command.includes('paint mode')) togglePaint();
+            if (command.includes('eraser')) toggleEraser();
+        };
+        
+        recognition.start();
+    }
+}
+/**
+ * Creates a new canvas in 3D space
+ * Positions the canvas in front of the camera
+ * Adds it to the scene and canvas tracking array
+ */
+function createNewCanvas() {
+    const geometry = new THREE.PlaneGeometry(5, 5);
+    const material = new THREE.MeshStandardMaterial({ 
+        color: 0xffffff, 
+        side: THREE.DoubleSide,
+        roughness: 0.7,
+        metalness: 0.0
+    });
+    const newCanvas = new THREE.Mesh(geometry, material);
+    newCanvas.receiveShadow = true;
+    
+    // Position the new canvas in front of the camera
+    const distance = 5;
+    const vector = new THREE.Vector3(0, 0, -distance);
+    vector.applyQuaternion(camera.quaternion);
+    newCanvas.position.copy(camera.position).add(vector);
+    newCanvas.quaternion.copy(camera.quaternion);
+    
+    scene.add(newCanvas);
+    canvases.push(newCanvas);
+    selectedCanvas = newCanvas;
+}
+
+function deleteSelectedCanvas() {
+    if (selectedCanvas) {
+        scene.remove(selectedCanvas);
+        canvases = canvases.filter(canvas => canvas !== selectedCanvas);
+        selectedCanvas = canvases.length > 0 ? canvases[0] : null;
+    }
+}
+/** Creates dots/brush strokes on the canvas based on current settings
+ * Handles both paint and erase modes
+ */
+
+function paint(event) {
+    const intersects = getIntersects(event);
+    if (intersects.length > 0) {
+        const point = intersects[0].point;
+        
+        if (eraserEnabled) {
+            // Eraser functionality
+            const eraseRadius = brushThickness * 2;
+            const toRemove = [];
+            
+            dots.forEach(dot => {
+                const distance = new THREE.Vector3(point.x, point.y, point.z)
+                    .distanceTo(dot.position);
+                if (distance < eraseRadius) {
+                    scene.remove(dot);
+                    toRemove.push(dot);
+                }
+            });
+            
+            dots = dots.filter(dot => !toRemove.includes(dot));
+        } else {
+            // Paint functionality
+            const dotGeometry = new THREE.CircleGeometry(brushThickness, 32);
+            const dotMaterial = new THREE.MeshStandardMaterial({ 
+                color: paintColor,
+                side: THREE.DoubleSide,
+                roughness: 0.3,
+                metalness: 0.2
+            });
+            const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+            
+            dot.position.copy(point);
+            dot.lookAt(camera.position);
+            dot.castShadow = true;
+            dot.receiveShadow = true;
+            
+            scene.add(dot);
+            dots.push(dot);
+            brushStrokes++;
+
+            // Update paintbrush model position if it exists
+            if (window.paintbrushModel) {
+                window.paintbrushModel.position.copy(point);
+                window.paintbrushModel.lookAt(camera.position);
+                window.paintbrushModel.visible = true;
+            }
+        }
+    }
+}
+
+function moveCanvas(event) {
+    const intersects = getIntersects(event);
+    if (intersects.length > 0 && selectedCanvas) {
+        const point = intersects[0].point;
+        const offset = new THREE.Vector3();
+        offset.copy(point).sub(selectedCanvas.position);
+        const movement = new THREE.Vector3();
+        movement.copy(offset);
+        selectedCanvas.position.add(movement);
+    }
+}
+
+function getIntersects(event) {
+    // Convert mouse position to normalized device coordinates
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    
+    // Update the picking ray with the camera and mouse position
+    raycaster.setFromCamera(mouse, camera);
+    
+    // Calculate objects intersecting the picking ray
+    const intersects = raycaster.intersectObjects(canvases);
+    if (intersects.length > 0) {
+        selectedCanvas = intersects[0].object;
+        return intersects;
+    }
+    return [];
+}
+
+function addGestureControls() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    renderer.domElement.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    });
+
+    renderer.domElement.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 2) {
+            // Pinch to adjust brush size
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            brushThickness = Math.max(0.01, Math.min(0.2, dist / 1000));
+        }
+    });
+}
+
+function onMouseDown(event) {
+    event.preventDefault();
+    const intersects = getIntersects(event);
+    if (canvasSelected && intersects.length > 0) {
+        isDraggingCanvas = true;
+        controls.enabled = false;
+    } else if ((paintbrushEnabled || eraserEnabled) && intersects.length > 0) {
+        isPainting = true;
+        controls.enabled = false;
+        paint(event);
+    }
+}
+
+function onMouseUp(event) {
+    event.preventDefault();
+    isDraggingCanvas = false;
+    isPainting = false;
+    controls.enabled = true;
+    if (window.paintbrushModel) {
+        window.paintbrushModel.visible = false;
+    }
+}
+
+function onMouseMove(event) {
+    event.preventDefault();
+    if (isDraggingCanvas) {
+        moveCanvas(event);
+    } else if (isPainting) {
+        paint(event);
+    }
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function updateStats() {
+    const fps = Math.round(1000 / (performance.now() - lastFrame));
+    performanceStats.push(fps);
+    if (performanceStats.length > 60) performanceStats.shift();
+    
+    const statsDiv = document.getElementById('stats');
+    statsDiv.innerHTML = `
+        FPS: ${fps}<br>
+        Brush Strokes: ${brushStrokes}<br>
+        Active Canvases: ${canvases.length}
+    `;
+    
+    lastFrame = performance.now();
+}
+function animate() {
+    requestAnimationFrame(animate);
+    
+    // Update animations if any
+    if (mixer) {
+        mixer.update(clock.getDelta());
+    }
+    
+    // Make all dots face the camera
+    dots.forEach(dot => {
+        dot.lookAt(camera.position);
+    });
+    
+    // Update controls
+    controls.update();
+    
+    // Update statistics
+    updateStats();
+    
+    // Render the scene
+    renderer.render(scene, camera);
+}
+
+// Start the application
+init();
+animate();
+</script>
+</body>
+</html>
