@@ -139,7 +139,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-Your Name - [atharvrevankar@gmail.com](mailto:atharvrevankar@gmail.com)
+ATHARV REVANKAR - [atharvrevankar@gmail.com](mailto:atharvrevankar@gmail.com)
 
 Project Link: [https://github.com/Anonymous-Ethicist/3DPAINTAPP](https://github.com/Anonymous-Ethicist/3DPAINTAPP)
 
