@@ -122,7 +122,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 
-<!-- Add this before your <script> tag -->
+
 
 <!-- Documentation -->
 <!--
@@ -292,7 +292,13 @@ function setupLighting() {
     // const helper = new THREE.DirectionalLightHelper(directionalLight, 5);
     // scene.add(helper);
 }
-
+/**
+ * Creates the initial drawing canvas in the 3D scene
+ * Sets up a plane geometry with standard material properties
+ * Positions the canvas at the center of the scene
+ * Adds the canvas to both the scene and tracking array
+ * @returns {void}
+ */
 function createInitialCanvas() {
     const geometry = new THREE.PlaneGeometry(5, 5);
     const material = new THREE.MeshStandardMaterial({ 
@@ -308,7 +314,13 @@ function createInitialCanvas() {
     canvases.push(initialCanvas);
     selectedCanvas = initialCanvas;
 }
-
+/**
+ * Sets up event listeners for user interactions
+ * Includes mouse events for drawing and canvas manipulation
+ * Handles window resize events to adjust the renderer
+ * Adds keyboard shortcuts for tool toggling and canvas management
+ * @returns {void}
+ */
 function addEventListeners() {
     // Mouse events
     document.addEventListener('mousedown', onMouseDown);
@@ -321,7 +333,16 @@ function addEventListeners() {
     // Keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcuts);
 }
-
+/**
+ * Loads a 3D paintbrush model using GLTFLoader
+ * Configures model scale and shadow properties
+ * Adds the model to the scene but initially hides it
+ * Model is stored in window.paintbrushModel for global access
+ * @returns {void}
+ * @fires GLTFLoader#load
+ * @fires GLTFLoader#progress
+ * @fires GLTFLoader#error
+ */
 function loadPaintbrushModel() {
     loader.load('paintbrush/scene.gltf', (gltf) => {
         const model = gltf.scene;
@@ -344,6 +365,13 @@ function loadPaintbrushModel() {
         console.error('Error loading model:', error);
     });
 }
+    
+/**
+ * Sets up the user interface elements for the application
+ * Creates a toolbar with tool buttons for painting, erasing, and canvas management
+ * Initializes the settings panel for color and brush size adjustments
+ * @returns {void}
+ */
 function createUIElements() {
     const toolbar = document.createElement('div');
     toolbar.className = 'toolbar';
@@ -369,7 +397,14 @@ function createUIElements() {
     // Create settings panel
     createSettingsPanel();
 }
-
+/**
+ * Creates an interactive tool button with icon and tooltip
+ * @param {HTMLElement} toolbar - The parent toolbar element to append the button to
+ * @param {string} icon - Font Awesome icon class name
+ * @param {string} tooltip - Text to display in the tooltip
+ * @param {Function} callback - Click event handler for the button
+ * @returns {HTMLButtonElement} The created button element
+ */
 function createToolButton(toolbar, icon, tooltip, callback) {
     const button = document.createElement('button');
     button.className = 'tool-button';
@@ -395,7 +430,17 @@ function createToolButton(toolbar, icon, tooltip, callback) {
     
     return button;
 }
-
+/**
+ * Creates the settings panel with color and brush size controls
+ * Includes:
+ * - Color picker for paint color selection
+ * - Slider for brush thickness adjustment
+ * - Real-time value display for brush size
+ * Panel is positioned in the top-right corner of the screen
+ * @returns {void}
+ * @fires input#color - When paint color is changed
+ * @fires input#range - When brush size is adjusted
+ */
 function createSettingsPanel() {
     const settingsPanel = document.createElement('div');
     settingsPanel.className = 'settings-panel';
@@ -439,7 +484,15 @@ function createSettingsPanel() {
     brushContainer.appendChild(brushSlider);
     settingsPanel.appendChild(brushContainer);
 }
-
+/**
+ * Creates UI controls for adjusting lighting in the scene
+ * Includes:
+ * - Slider for directional light intensity
+ * - Slider for ambient light intensity
+ * Displays real-time values for each light setting
+ * @returns {void}
+ * @fires input#range - When light intensity is adjusted
+ */
 function createLightingControls() {
     const lightControls = document.createElement('div');
     lightControls.className = 'settings-panel';
@@ -494,7 +547,12 @@ function createLightingControls() {
     ambientContainer.appendChild(ambientSlider);
     lightControls.appendChild(ambientContainer);
 }
-
+/**
+ * Handles keyboard shortcuts for tool and canvas management
+ * Supports toggling paint and eraser modes, creating and deleting canvases
+ * @param {KeyboardEvent} event - The keyboard event triggered by user input
+ * @returns {void}
+ */
 function handleKeyboardShortcuts(event) {
     switch(event.key.toLowerCase()) {
         case 'p':
@@ -511,7 +569,13 @@ function handleKeyboardShortcuts(event) {
             break;
     }
 }
-
+/**
+ * Toggles paint mode on/off
+ * Disables eraser mode and canvas selection when paint mode is enabled
+ * Controls orbit controls based on paint mode state
+ * Updates UI button states to reflect current mode
+ * @returns {void}
+ */
 function togglePaint() {
     paintbrushEnabled = !paintbrushEnabled;
     eraserEnabled = false;
@@ -519,7 +583,13 @@ function togglePaint() {
     controls.enabled = !paintbrushEnabled;
     updateButtonStates();
 }
-
+/**
+ * Toggles eraser mode on/off
+ * Disables paint mode and canvas selection when eraser mode is enabled
+ * Controls orbit controls based on eraser mode state
+ * Updates UI button states to reflect current mode
+ * @returns {void}
+ */
 function toggleEraser() {
     eraserEnabled = !eraserEnabled;
     paintbrushEnabled = false;
@@ -527,7 +597,11 @@ function toggleEraser() {
     controls.enabled = !eraserEnabled;
     updateButtonStates();
 }
-
+/**
+ * Updates the UI button states to reflect the current tool mode
+ * Highlights the active tool button based on the current mode
+ * @returns {void}
+ */
 function updateButtonStates() {
     document.querySelectorAll('.tool-button').forEach(button => {
         button.classList.remove('active');
@@ -539,7 +613,12 @@ function updateButtonStates() {
         document.querySelector('.fa-eraser').parentElement.classList.add('active');
     }
 }
-
+/**
+ * Initializes voice command functionality if supported by the browser
+ * Sets up continuous speech recognition for tool and canvas commands
+ * Handles recognized voice commands to trigger corresponding actions
+ * @returns {void}
+ */
 function initVoiceCommands() {
     if ('webkitSpeechRecognition' in window) {
         const recognition = new webkitSpeechRecognition();
@@ -584,7 +663,11 @@ function createNewCanvas() {
     canvases.push(newCanvas);
     selectedCanvas = newCanvas;
 }
-
+/**
+ * Removes the currently selected canvas from the scene
+ * Updates the selected canvas to the next available canvas if one exists
+ * @returns {void}
+ */
 function deleteSelectedCanvas() {
     if (selectedCanvas) {
         scene.remove(selectedCanvas);
@@ -645,7 +728,12 @@ function paint(event) {
         }
     }
 }
-
+/**
+ * Handles the movement of selected canvas in 3D space
+ * Updates canvas position based on mouse intersection point
+ * @param {MouseEvent} event - The mouse event containing position data
+ * @returns {void}
+ */
 function moveCanvas(event) {
     const intersects = getIntersects(event);
     if (intersects.length > 0 && selectedCanvas) {
@@ -657,7 +745,13 @@ function moveCanvas(event) {
         selectedCanvas.position.add(movement);
     }
 }
-
+/**
+ * Calculates intersections between mouse position and canvas objects
+ * Converts mouse coordinates to raycaster coordinates
+ * Updates selected canvas based on intersection
+ * @param {MouseEvent} event - The mouse event containing position data
+ * @returns {Array<THREE.Intersection>} Array of intersections with canvas objects
+ */
 function getIntersects(event) {
     // Convert mouse position to normalized device coordinates
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -674,7 +768,16 @@ function getIntersects(event) {
     }
     return [];
 }
-
+/**
+ * Sets up touch gesture controls for mobile interaction
+ * Handles:
+ * - Single touch for drawing
+ * - Two-finger pinch for brush size adjustment
+ * Prevents default touch behaviors
+ * @returns {void}
+ * @fires touchstart
+ * @fires touchmove
+ */
 function addGestureControls() {
     let touchStartX = 0;
     let touchStartY = 0;
@@ -697,7 +800,16 @@ function addGestureControls() {
         }
     });
 }
-
+/**
+ * Handles mouse button press events
+ * Manages:
+ * - Canvas dragging initiation
+ * - Paint/erase mode activation
+ * - Orbit controls state
+ * @param {MouseEvent} event - The mouse down event
+ * @returns {void}
+ * @fires getIntersects
+ */
 function onMouseDown(event) {
     event.preventDefault();
     const intersects = getIntersects(event);
@@ -710,7 +822,16 @@ function onMouseDown(event) {
         paint(event);
     }
 }
-
+/**
+ * Handles mouse button release events
+ * Resets:
+ * - Canvas dragging state
+ * - Painting state
+ * - Orbit controls
+ * - Paintbrush model visibility
+ * @param {MouseEvent} event - The mouse up event
+ * @returns {void}
+ */
 function onMouseUp(event) {
     event.preventDefault();
     isDraggingCanvas = false;
@@ -720,7 +841,15 @@ function onMouseUp(event) {
         window.paintbrushModel.visible = false;
     }
 }
-
+/**
+ * Handles mouse movement events
+ * Manages:
+ * - Canvas dragging
+ * - Continuous painting/erasing
+ * Prevents default mouse behavior
+ * @param {MouseEvent} event - The mouse move event
+ * @returns {void}
+ */
 function onMouseMove(event) {
     event.preventDefault();
     if (isDraggingCanvas) {
@@ -729,13 +858,28 @@ function onMouseMove(event) {
         paint(event);
     }
 }
-
+/**
+ * Handles window resize events
+ * Updates:
+ * - Camera aspect ratio
+ * - Camera projection matrix
+ * - Renderer size to match window
+ * @returns {void}
+ */
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
-
+/**
+ * Updates performance statistics display
+ * Calculates and shows:
+ * - Current FPS (Frames Per Second)
+ * - Total brush strokes count
+ * - Number of active canvases
+ * Maintains a rolling average of performance stats
+ * @returns {void}
+ */
 function updateStats() {
     const fps = Math.round(1000 / (performance.now() - lastFrame));
     performanceStats.push(fps);
@@ -750,6 +894,18 @@ function updateStats() {
     
     lastFrame = performance.now();
 }
+    /**
+ * Main animation loop for the application
+ * Handles:
+ * - Animation frame requests
+ * - Animation mixer updates
+ * - Dot orientation updates
+ * - Controls updates
+ * - Statistics updates
+ * - Scene rendering
+ * @returns {void}
+ * @fires requestAnimationFrame
+ */
 function animate() {
     requestAnimationFrame(animate);
     
